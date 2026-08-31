@@ -1419,6 +1419,8 @@ function createPreorder(data) {
   const customer = getCustomer(data.customer_id);
   if (!customer) throw new Error("Customer is required");
   const quantity = Number(data.quantity || 1);
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > 5) throw new Error("Quantity must be between 1 and 5");
+  if (Number(data.deposit_amount || 0) < 0) throw new Error("Deposit cannot be negative");
   const used = store.preorders
     .filter((preorder) => preorder.record_id === record.id && preorder.customer_id === customer.id && preorder.status !== "cancelled")
     .reduce((sum, preorder) => sum + Number(preorder.quantity || 0), 0);
@@ -1469,6 +1471,8 @@ function createServiceTicket(data) {
     contact_attempts: 0,
     status: "received",
     symptoms: String(data.symptoms).trim(),
+    photos: Array.isArray(data.photos) ? data.photos : [],
+    checklist: data.checklist && typeof data.checklist === "object" ? clone(data.checklist) : {},
     notes: String(data.notes || "").trim(),
     received_at: nowIso(),
   };
@@ -1531,8 +1535,11 @@ function loyaltyData(customerId) {
   if (!customer) throw new Error("Customer not found");
   const transactions = clone(store.loyaltyLedger.filter((entry) => entry.customer_id === Number(customerId)).sort((left, right) => sortByDateDesc(left, right)));
   const balance = transactions.reduce((sum, entry) => sum + Number(entry.delta_points || 0), 0);
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() + 90);
+  const cutoffIso = cutoff.toISOString().slice(0, 10);
   const expiring = transactions
-    .filter((entry) => Number(entry.delta_points) > 0 && entry.expires_at)
+    .filter((entry) => Number(entry.delta_points) > 0 && entry.expires_at && entry.expires_at <= cutoffIso)
     .reduce((sum, entry) => sum + Number(entry.delta_points || 0), 0);
   return {
     ok: true,
@@ -1908,7 +1915,6 @@ async function loadMeta() {
     $("#label-list").innerHTML = data.labels.map((label) => `<option value="${esc(label.name)}">`).join("");
   }
 
-  await loadPreorderRecords();
   return data;
 }
 
@@ -2416,11 +2422,13 @@ async function loadPreorderRecords() {
 
 async function loadPreorders() {
   try {
-    await loadPreorderRecords();
     const data = await api("/api/records");
+    const preorders = data.items.filter((item) => item.pre_order);
+    $("#po-record").innerHTML =
+      preorders.map((record) => `<option value="${record.id}">${esc(record.artist)} - ${esc(record.title)} - ${record.year}</option>`).join("") ||
+      '<option value="">No active pre-orders</option>';
     $("#release-list").innerHTML =
-      data.items
-        .filter((item) => item.pre_order)
+      preorders
         .map(
           (item) =>
             `<div class="timeline-item"><strong>${esc(item.title)}</strong><div class="muted">Release ${item.release_date || "-"}</div></div>`
@@ -2447,6 +2455,7 @@ async function savePreorder(event) {
       }),
     });
     toast(`Pre-order created - release ${data.release_date}`);
+    await loadPreorders();
     await loadDashboard();
   } catch (error) {
     toast(error.message, true);
@@ -2513,6 +2522,7 @@ async function createTicket(event) {
     });
 
     toast(`Created ${data.ticket_number}`);
+    event.target.reset();
     await loadService();
   } catch (error) {
     toast(error.message, true);
@@ -2593,6 +2603,9 @@ async function saveConsignment(event) {
     });
 
     toast(`Agreement ${data.agreement_number} finalised`);
+    event.target.reset();
+    $("#c-date").value = todayIso();
+    $("#tier-editor").innerHTML = '<div class="tier-row"><input placeholder="From" value="0"><input placeholder="To" value="30"><input placeholder="%" value="60"></div>';
     await loadConsignments();
   } catch (error) {
     toast(error.message, true);
@@ -2602,6 +2615,7 @@ async function saveConsignment(event) {
 async function loadLoyalty() {
   const customerId = Number($("#loyal-customer").value) || 1;
   try {
+    if ($("#loyal-customer") && !$("#loyal-customer").value) $("#loyal-customer").value = String(customerId);
     const data = await api(`/api/loyalty/${customerId}`);
     $("#loyalty-card").innerHTML = `
       <div class="kpi"><small>Current points</small><strong>${data.balance}</strong><em>${money(data.monetary_equivalent)}</em></div>
@@ -2867,7 +2881,23 @@ function init() {
   $("#pos-shipping")?.addEventListener("input", renderCart);
   $("#r-media")?.addEventListener("change", gradeDescription);
 
-  const initialView = window.location.hash.replace("#", "") || "dashboard";
+  const initialParams = new URLSearchParams(window.location.search);
+  const initialView = initialParams.get("view") || window.location.hash.replace("#", "") || "dashboard";
+  if (initialView === "search") {
+    const searchFields = {
+      "#search-input": "q",
+      "#s-grade": "grade",
+      "#s-format": "format",
+      "#s-country": "country",
+      "#s-min": "min_price",
+      "#s-max": "max_price",
+    };
+    Object.entries(searchFields).forEach(([selector, key]) => {
+      const element = $(selector);
+      if (element && initialParams.has(key)) element.value = initialParams.get(key);
+    });
+    if ($("#s-stock")) $("#s-stock").checked = initialParams.get("in_stock") === "1";
+  }
   showView(initialView);
   loadMeta().catch((error) => toast(error.message, true));
 
