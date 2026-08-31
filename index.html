@@ -165,14 +165,14 @@
                 <input id="r-title" maxlength="200" required>
               </label>
               <label>Label *
-                <input id="r-label" list="label-list" required>
+                <input id="r-label" list="label-list" maxlength="80" required>
                 <datalist id="label-list"></datalist>
               </label>
               <label>Catalogue Number *
                 <input id="r-cat" maxlength="30" required>
               </label>
               <label>Country (ISO-2) *
-                <input id="r-country" value="US" maxlength="2" required>
+                <select id="r-country" required></select>
               </label>
               <label>Year *
                 <input id="r-year" type="number" min="1948" required oninput="setDecade()">
@@ -282,10 +282,6 @@
                 </select>
                 <select id="filter-country" onchange="loadRecords()">
                   <option value="">Any country</option>
-                  <option>US</option>
-                  <option>GB</option>
-                  <option>DE</option>
-                  <option>JP</option>
                 </select>
                 <select id="filter-format" onchange="loadRecords()">
                   <option value="">Any format</option>
@@ -293,7 +289,14 @@
                   <option value="7in">7" Single</option>
                   <option value="coloured">Coloured</option>
                 </select>
+                <select id="filter-decade" onchange="loadRecords()">
+                  <option value="">Any decade</option>
+                </select>
                 <label class="checkbox"><input id="filter-stock" type="checkbox" onchange="loadRecords()"> In stock</label>
+              </div>
+              <div class="filter-row">
+                <label>Min Price <input id="filter-min-price" type="number" placeholder="0.00" step="0.01" oninput="loadRecords()"></label>
+                <label>Max Price <input id="filter-max-price" type="number" placeholder="9999.99" step="0.01" oninput="loadRecords()"></label>
               </div>
               <div id="record-list" class="cards"></div>
             </div>
@@ -310,21 +313,28 @@
           <form class="panel" id="trade-form" onsubmit="saveTradeIn(event)">
             <div class="form-grid compact">
               <label>Customer<select id="t-customer"></select></label>
-              <label>Offer Mode
+              <label>Trade Date<input id="t-date" type="date" required></label>
+              <label>Customer Type
                 <div class="radio-row">
-                  <label><input type="radio" name="offer_mode" value="cash" checked>Cash</label>
-                  <label><input type="radio" name="offer_mode" value="store_credit">Store Credit +20%</label>
+                  <label><input type="radio" name="customer_type" value="walk_in" checked>Walk-in</label>
+                  <label><input type="radio" name="customer_type" value="picker">Picker</label>
                 </div>
               </label>
-              <label>ID Type
-                <select id="t-idtype">
-                  <option value="">Not required</option>
-                  <option value="passport">Passport</option>
-                  <option value="driving_licence">Driving Licence</option>
-                  <option value="national_id">National ID</option>
-                </select>
+              <label>Offer Mode
+                <div class="radio-row">
+                  <label><input type="radio" name="offer_mode" value="cash" checked onchange="updateIdRequirements()">Cash</label>
+                  <label><input type="radio" name="offer_mode" value="store_credit" onchange="updateIdRequirements()">Store Credit +20%</label>
+                </div>
               </label>
-              <label>ID Number<input id="t-idnum"></label>
+              <label id="id-type-label">ID Type
+                <div class="radio-row">
+                  <label><input type="radio" name="id_type" value="" checked>Not required</label>
+                  <label><input type="radio" name="id_type" value="passport">Passport</label>
+                  <label><input type="radio" name="id_type" value="driving_licence">Driving Licence</label>
+                  <label><input type="radio" name="id_type" value="national_id">National ID</label>
+                </div>
+              </label>
+              <label id="id-number-label">ID Number<input id="t-idnum"></label>
               <label class="span-2">Signature / typed fallback<input id="t-sign" placeholder="Type name to sign" required></label>
               <label class="span-2 toggle-label"><input id="t-accept" type="checkbox"> Customer accepts offer</label>
               <label class="span-2">Notes<textarea id="t-notes" maxlength="500"></textarea></label>
@@ -601,7 +611,7 @@
             <div class="filter-row">
               <label>Grade<select id="s-grade" onchange="loadCustomerSearch()"><option value="">Any</option><option>NM</option><option>VG+</option><option>VG</option><option>G+</option></select></label>
               <label>Format<select id="s-format" onchange="loadCustomerSearch()"><option value="">Any</option><option value="12in_lp">12" LP</option><option value="7in">7" Single</option><option value="coloured">Coloured</option></select></label>
-              <label>Country<select id="s-country" onchange="loadCustomerSearch()"><option value="">Any</option><option>US</option><option>GB</option><option>DE</option></select></label>
+              <label>Country<select id="s-country" onchange="loadCustomerSearch()"><option value="">Any</option></select></label>
               <label>Min $<input id="s-min" onchange="loadCustomerSearch()"></label>
               <label>Max $<input id="s-max" onchange="loadCustomerSearch()"></label>
               <label class="checkbox"><input id="s-stock" type="checkbox" onchange="loadCustomerSearch()"> In Stock</label>

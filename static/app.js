@@ -12,6 +12,33 @@ const FORMAT_LABELS = {
 };
 
 const GRADES = ["M", "NM", "VG+", "VG", "G+", "G", "F", "P"];
+const ISO_COUNTRY_CODES = [
+  "AD", "AE", "AF", "AG", "AI", "AL", "AM", "AO", "AQ", "AR", "AS", "AT", "AU", "AW", "AX", "AZ",
+  "BA", "BB", "BD", "BE", "BF", "BG", "BH", "BI", "BJ", "BL", "BM", "BN", "BO", "BQ", "BR", "BS", "BT", "BV", "BW", "BY", "BZ",
+  "CA", "CC", "CD", "CF", "CG", "CH", "CI", "CK", "CL", "CM", "CN", "CO", "CR", "CU", "CV", "CW", "CX", "CY", "CZ",
+  "DE", "DJ", "DK", "DM", "DO", "DZ",
+  "EC", "EE", "EG", "EH", "ER", "ES", "ET",
+  "FI", "FJ", "FK", "FM", "FO", "FR",
+  "GA", "GB", "GD", "GE", "GF", "GG", "GH", "GI", "GL", "GM", "GN", "GP", "GQ", "GR", "GS", "GT", "GU", "GW", "GY",
+  "HK", "HM", "HN", "HR", "HT", "HU",
+  "ID", "IE", "IL", "IM", "IN", "IO", "IQ", "IR", "IS", "IT",
+  "JE", "JM", "JO", "JP",
+  "KE", "KG", "KH", "KI", "KM", "KN", "KP", "KR", "KW", "KY", "KZ",
+  "LA", "LB", "LC", "LI", "LK", "LR", "LS", "LT", "LU", "LV", "LY",
+  "MA", "MC", "MD", "ME", "MF", "MG", "MH", "MK", "ML", "MM", "MN", "MO", "MP", "MQ", "MR", "MS", "MT", "MU", "MV", "MW", "MX", "MY", "MZ",
+  "NA", "NC", "NE", "NF", "NG", "NI", "NL", "NO", "NP", "NR", "NU", "NZ",
+  "OM",
+  "PA", "PE", "PF", "PG", "PH", "PK", "PL", "PM", "PN", "PR", "PS", "PT", "PW", "PY",
+  "QA",
+  "RE", "RO", "RS", "RU", "RW",
+  "SA", "SB", "SC", "SD", "SE", "SG", "SH", "SI", "SJ", "SK", "SL", "SM", "SN", "SO", "SR", "SS", "ST", "SV", "SX", "SY", "SZ",
+  "TC", "TD", "TF", "TG", "TH", "TJ", "TK", "TL", "TM", "TN", "TO", "TR", "TT", "TV", "TW", "TZ",
+  "UA", "UG", "UM", "US", "UY", "UZ",
+  "VA", "VC", "VE", "VG", "VI", "VN", "VU",
+  "WF", "WS",
+  "YE", "YT",
+  "ZA", "ZM", "ZW"
+];
 const GRADE_RANK = Object.fromEntries(GRADES.map((grade, index) => [grade, index]));
 const GRADE_DEFS = {
   M: "Perfect sealed or untouched copy with no visible handling.",
@@ -102,9 +129,34 @@ function sortByDateDesc(left, right, key = "created_at") {
   return String(right[key] || "").localeCompare(String(left[key] || ""));
 }
 
+function normalizeStore(source = {}) {
+  const initial = createInitialStore();
+  const normalized = {
+    ...initial,
+    ...source,
+    settings: { ...initial.settings, ...(source.settings || {}) },
+    customers: Array.isArray(source.customers) ? source.customers : initial.customers,
+    consignors: Array.isArray(source.consignors) ? source.consignors : initial.consignors,
+    records: Array.isArray(source.records) ? source.records : initial.records,
+    inventory: Array.isArray(source.inventory) ? source.inventory : initial.inventory,
+    wantlists: Array.isArray(source.wantlists) ? source.wantlists : initial.wantlists,
+    tradeIns: Array.isArray(source.tradeIns) ? source.tradeIns : initial.tradeIns,
+    preorders: Array.isArray(source.preorders) ? source.preorders : initial.preorders,
+    serviceTickets: Array.isArray(source.serviceTickets) ? source.serviceTickets : initial.serviceTickets,
+    consignments: Array.isArray(source.consignments) ? source.consignments : initial.consignments,
+    loyaltyLedger: Array.isArray(source.loyaltyLedger) ? source.loyaltyLedger : initial.loyaltyLedger,
+    blacklist: Array.isArray(source.blacklist) ? source.blacklist : initial.blacklist,
+    audits: Array.isArray(source.audits) ? source.audits : initial.audits,
+    payoutsDue: Array.isArray(source.payoutsDue) ? source.payoutsDue : initial.payoutsDue,
+    orders: Array.isArray(source.orders) ? source.orders : initial.orders,
+  };
+
+  return normalized;
+}
+
 function saveStore() {
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizeStore(store)));
   } catch (error) {
     // Keep the UI usable even if localStorage is unavailable.
   }
@@ -115,8 +167,8 @@ function loadStore() {
     const raw = window.localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.records) && Array.isArray(parsed.inventory)) {
-        return parsed;
+      if (parsed && typeof parsed === "object") {
+        return normalizeStore(parsed);
       }
     }
   } catch (error) {
@@ -129,6 +181,11 @@ function loadStore() {
     // Ignore persistence issues in file:// or private contexts.
   }
   return initial;
+}
+
+function refreshStoreSnapshot() {
+  store = loadStore();
+  return store;
 }
 
 function createInitialStore() {
@@ -719,16 +776,41 @@ function pdfEscape(value) {
     .replace(/\)/g, "\\)");
 }
 
-function createPdfBlob(title, lines) {
-  const textLines = [title, "", ...lines].slice(0, 42);
-  const commands = ["BT", "/F1 18 Tf", "50 790 Td", `(${pdfEscape(textLines[0])}) Tj`, "/F1 11 Tf"];
-  textLines.slice(1).forEach((line, index) => {
-    const y = 760 - index * 16;
-    commands.push(`1 0 0 1 50 ${y} Tm (${pdfEscape(line)}) Tj`);
-  });
-  commands.push("ET");
-  const stream = commands.join("\n");
+function wrapPdfLines(text, maxChars = 52) {
+  const pieces = String(text ?? "").split(/\s+/).filter(Boolean);
+  if (!pieces.length) return [""];
 
+  const lines = [];
+  let current = "";
+  for (const piece of pieces) {
+    const candidate = current ? `${current} ${piece}` : piece;
+    if (candidate.length <= maxChars) {
+      current = candidate;
+    } else {
+      if (current) lines.push(current);
+      current = piece;
+    }
+  }
+  if (current) lines.push(current);
+  return lines;
+}
+
+function createPdfBlob(title, lines) {
+  const pageTitle = String(title || "Vintage Vinyl");
+  const contentLines = [pageTitle, "", ...lines]
+    .flatMap((line) => wrapPdfLines(line, 52))
+    .slice(0, 38);
+
+  const commands = [];
+  let y = 760;
+  for (const line of contentLines) {
+    const fontSize = line === pageTitle ? 18 : 11;
+    const leading = line === pageTitle ? 24 : 16;
+    commands.push(`BT /F1 ${fontSize} Tf 50 ${y} Td (${pdfEscape(line)}) Tj ET`);
+    y -= leading;
+  }
+
+  const stream = commands.join("\n");
   const objects = [
     "1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj",
     "2 0 obj << /Type /Pages /Count 1 /Kids [3 0 R] >> endobj",
@@ -1060,13 +1142,17 @@ function validateRecordInput(data) {
   const mediaGrade = data.media_grade || "VG";
   const sleeveGrade = data.sleeve_grade || mediaGrade;
   const binCode = String(data.bin_code || "").trim();
+  const matrixA = String(data.matrix_runout_a || "").trim();
+  const matrixB = String(data.matrix_runout_b || "").trim();
 
   if (!artist) throw new Error("Artist is required");
   if (!label) throw new Error("Label is required");
+  if (label.length > 80) throw new Error("Label must be 80 characters or less");
   if (!title) throw new Error("Title is required");
   if (!catalogueNumber) throw new Error("Catalogue Number is required");
-  if (!countryCode || countryCode.length !== 2) throw new Error("Country must be an ISO-2 code");
+  if (!ISO_COUNTRY_CODES.includes(countryCode)) throw new Error("Country must be a valid ISO-3166 alpha-2 code");
   if (!year || year < 1948 || year > new Date().getFullYear()) throw new Error("Year outside allowed range");
+  if (matrixA.length > 60 || matrixB.length > 60) throw new Error("Matrix runout codes must be 60 characters or less");
   if (!FORMAT_LABELS[format]) throw new Error("Format is invalid");
   if (![33, 45, 78].includes(rpm)) throw new Error("RPM is invalid");
   if (!GRADES.includes(mediaGrade) || !GRADES.includes(sleeveGrade)) throw new Error("Grade is invalid");
@@ -1080,6 +1166,13 @@ function validateRecordInput(data) {
       record.country_code === countryCode
   );
   if (duplicate) throw new Error("Duplicate label + catalogue + country");
+
+  const duplicateMatrixA = store.inventory.find(
+    (item) =>
+      String(item.matrix_runout_a || "").trim().toUpperCase() === matrixA.toUpperCase() &&
+      String(item.matrix_runout_a || "").trim() !== ""
+  );
+  if (matrixA && duplicateMatrixA) throw new Error("Matrix Side A must be unique across the catalogue");
 
   return {
     artist,
@@ -1225,12 +1318,18 @@ function createTradeIn(data) {
     const directRecord = findRecord(row.pressing_id);
     const inventory = findInventory(row.pressing_id);
     const record = directRecord || (inventory ? findRecord(inventory.record_id) : null);
-    const base = record ? Number(recordSummary(record).price || 18) : 18;
+    const base = record ? Number(recordSummary(record).price || 18) : Number(row.estimated_price || 18);
     const multiplier = row.media_grade === "NM" ? 0.6 : row.media_grade === "VG+" ? 0.5 : row.media_grade === "VG" ? 0.4 : 0.28;
     const offer = base * multiplier;
     offerTotal += offer;
     return {
       pressing_id: Number(row.pressing_id),
+      artist: String(row.artist || record?.artist || "").trim(),
+      title: String(row.title || record?.title || "").trim(),
+      year: row.year || record?.year || null,
+      catalogue_number: String(row.catalogue_number || record?.catalogue_number || "").trim(),
+      estimated_price: row.estimated_price != null ? Number(row.estimated_price) : Number(base.toFixed(2)),
+      override_reason: String(row.override_reason || "").trim(),
       media_grade: row.media_grade,
       sleeve_grade: row.sleeve_grade,
       photos: row.photos || [],
@@ -1243,6 +1342,8 @@ function createTradeIn(data) {
   const tradeIn = {
     id: nextId(store.tradeIns),
     customer_id: Number(data.customer_id) || null,
+    trade_date: String(data.trade_date || todayIso()).slice(0, 10),
+    customer_type: data.customer_type || "walk_in",
     offer_mode: data.offer_mode || "cash",
     id_type: data.id_type || "",
     id_number: data.id_number || "",
@@ -1256,7 +1357,7 @@ function createTradeIn(data) {
 
   if (!tradeIn.signature) throw new Error("Signature is required");
   store.tradeIns.unshift(tradeIn);
-  createAudit("trade_in", tradeIn.id, "created", { rows: cleanRows.length, offer_mode: tradeIn.offer_mode });
+  createAudit("trade_in", tradeIn.id, "created", { rows: cleanRows.length, offer_mode: tradeIn.offer_mode, customer_type: tradeIn.customer_type });
   saveStore();
   return { ok: true, offer_total: tradeIn.offer_total };
 }
@@ -1816,6 +1917,11 @@ function loadView(name) {
     records: () => loadMeta().then(loadRecords),
     tradeins: async () => {
       await loadMeta();
+      const tradeDateInput = $("#t-date");
+      if (tradeDateInput && !tradeDateInput.value) {
+        tradeDateInput.value = todayIso().slice(0, 10);
+      }
+      updateIdRequirements();
       if (!$("#trade-rows").children.length) addTradeRow();
     },
     wantlists: async () => {
@@ -1870,9 +1976,44 @@ async function loadHealth() {
   return;
 }
 
+function populateCountrySelect(selector, { includeAny = false, anyLabel = "Any country", defaultValue = "US" } = {}) {
+  const el = $(selector);
+  if (!el) return;
+
+  const currentValue = el.value || defaultValue;
+  const options = includeAny ? [`<option value="">${anyLabel}</option>`] : [];
+  options.push(...ISO_COUNTRY_CODES.map((code) => `<option value="${code}">${code}</option>`));
+  el.innerHTML = options.join("");
+
+  const matched = [...el.options].some((option) => option.value === currentValue);
+  el.value = matched ? currentValue : defaultValue;
+}
+
+function populateDecadeSelect(selector) {
+  const el = $(selector);
+  if (!el) return;
+
+  const currentValue = el.value;
+  const decades = [...new Set(store.records.map((record) => Math.floor(record.year / 10) * 10))]
+    .sort((a, b) => b - a)
+    .map((decade) => `${decade}s`);
+
+  const options = [`<option value="">Any decade</option>`];
+  options.push(...decades.map((decade) => `<option value="${decade}">${decade}</option>`));
+  el.innerHTML = options.join("");
+
+  const matched = [...el.options].some((option) => option.value === currentValue);
+  el.value = matched ? currentValue : "";
+}
+
 async function loadMeta() {
+  refreshStoreSnapshot();
   const data = await api("/api/meta");
   window.meta = data;
+
+  populateCountrySelect("#r-country", { includeAny: false, defaultValue: "US" });
+  populateCountrySelect("#filter-country", { includeAny: true, anyLabel: "Any country", defaultValue: "" });
+  populateCountrySelect("#s-country", { includeAny: true, anyLabel: "Any", defaultValue: "" });
 
   if ($("#dashboard-date")) {
     $("#dashboard-date").textContent = new Date().toLocaleDateString();
@@ -1915,11 +2056,14 @@ async function loadMeta() {
     $("#label-list").innerHTML = data.labels.map((label) => `<option value="${esc(label.name)}">`).join("");
   }
 
+  populateDecadeSelect("#filter-decade");
+
   return data;
 }
 
 async function loadDashboard() {
   try {
+    refreshStoreSnapshot();
     const data = await api("/api/dashboard");
     const kpis = [
       ["Sales (gross)", money(data.kpi.gross)],
@@ -1988,7 +2132,12 @@ function defaultRPM() {
 }
 
 function setDecade() {
-  const year = Number.parseInt($("#r-year").value || "0", 10);
+  const yearInput = $("#r-year");
+  const currentYear = new Date().getFullYear();
+  if (yearInput) {
+    yearInput.setAttribute("max", String(currentYear));
+  }
+  const year = Number.parseInt((yearInput ? yearInput.value : "0") || "0", 10);
   $("#r-decade").value = year ? `${Math.floor(year / 10) * 10}s` : "";
 }
 
@@ -2025,12 +2174,18 @@ async function checkMatrix() {
 
 async function loadRecords() {
   try {
+    refreshStoreSnapshot();
+    const minPrice = $("#filter-min-price").value;
+    const maxPrice = $("#filter-max-price").value;
     const params = new URLSearchParams({
       q: $("#catalogue-search").value,
       grade: $("#filter-grade").value,
       country: $("#filter-country").value,
       format: $("#filter-format").value,
+      decade: $("#filter-decade").value,
       in_stock: $("#filter-stock").checked ? "1" : "",
+      min_price: minPrice ? String(minPrice) : "",
+      max_price: maxPrice ? String(maxPrice) : "",
     });
 
     const data = await api(`/api/records?${params}`);
@@ -2148,6 +2303,12 @@ function addTradeRow() {
   row.dataset.idx = String(tradeRows);
   row.innerHTML = `
     <div><label class="muted">Pressing ID<input class="tr-pressing" type="number" required></label></div>
+    <div><label class="muted">Artist<input class="tr-artist" placeholder="Artist"></label></div>
+    <div><label class="muted">Title<input class="tr-title" placeholder="Title"></label></div>
+    <div><label class="muted">Year<input class="tr-year" type="number" placeholder="1985"></label></div>
+    <div><label class="muted">Catalogue<input class="tr-catalogue" placeholder="CAT-001"></label></div>
+    <div><label class="muted">Estimated Price<input class="tr-estimated-price" inputmode="decimal" placeholder="0.00"></label></div>
+    <div><label class="muted">Override Reason<input class="tr-override" placeholder="If unavailable, explain why"></label></div>
     <div><label class="muted">Media<select class="tr-media"><option>M</option><option>NM</option><option>VG+</option><option selected>VG</option><option>G+</option><option>G</option><option>F</option><option>P</option></select></label></div>
     <div><label class="muted">Sleeve<select class="tr-sleeve"><option>M</option><option>NM</option><option>VG+</option><option selected>VG</option><option>G+</option><option>G</option><option>F</option><option>P</option></select></label></div>
     <div><label class="muted">Condition Photos<input class="tr-photos-file" type="file" accept="image/jpeg,image/png" multiple required></label></div>
@@ -2164,16 +2325,68 @@ async function uploadFiles(fileList) {
   return files.map((file) => `${Date.now()}_${file.name}`);
 }
 
+function updateIdRequirements() {
+  const offerMode = document.querySelector('input[name="offer_mode"]:checked').value;
+  const idTypeRadios = [...document.querySelectorAll('input[name="id_type"]')];
+  const idNumberInput = $("#t-idnum");
+
+  idTypeRadios.forEach((radio) => {
+    radio.required = offerMode === "store_credit";
+  });
+  if (idNumberInput) {
+    idNumberInput.required = offerMode === "store_credit";
+  }
+
+  if (offerMode === "store_credit") {
+    if (!idTypeRadios.some((radio) => radio.checked)) {
+      const fallback = document.querySelector('input[name="id_type"][value="passport"]');
+      if (fallback) fallback.checked = true;
+    }
+  } else {
+    const fallback = document.querySelector('input[name="id_type"][value=""]');
+    if (fallback) fallback.checked = true;
+  }
+}
+
 async function saveTradeIn(event) {
   event.preventDefault();
   try {
+    const offerMode = document.querySelector('input[name="offer_mode"]:checked').value;
+    const idType = document.querySelector('input[name="id_type"]:checked').value;
+    const idNumber = $("#t-idnum").value.trim();
+    const tradeDate = $("#t-date").value || todayIso();
+
+    if (!tradeDate) throw new Error("Trade Date is required");
+
+    // Validate ID requirements for store credit
+    if (offerMode === "store_credit") {
+      if (!idType) throw new Error("ID Type is required for Store Credit transactions");
+      if (!idNumber) throw new Error("ID Number is required for Store Credit transactions");
+    }
+
     const rows = [];
     for (const row of [...$("#trade-rows").children]) {
       const files = row.querySelector(".tr-photos-file").files;
       if (!files.length) throw new Error("Each trade-in row requires at least one condition photo");
+      const artist = String(row.querySelector(".tr-artist").value || "").trim();
+      const title = String(row.querySelector(".tr-title").value || "").trim();
+      const year = row.querySelector(".tr-year").value;
+      const catalogue = String(row.querySelector(".tr-catalogue").value || "").trim();
+      const estimatedPrice = row.querySelector(".tr-estimated-price").value;
+      const overrideReason = String(row.querySelector(".tr-override").value || "").trim();
+      const missingRowData = !artist || !title || !year || !catalogue || !estimatedPrice;
+      if (missingRowData && !overrideReason) {
+        throw new Error("Each trade-in row needs artist, title, year, catalogue, estimate, or an override reason");
+      }
       const photos = await uploadFiles(files);
       rows.push({
         pressing_id: Number(row.querySelector(".tr-pressing").value),
+        artist,
+        title,
+        year: year ? Number(year) : null,
+        catalogue_number: catalogue,
+        estimated_price: estimatedPrice ? Number(estimatedPrice) : null,
+        override_reason: overrideReason,
         media_grade: row.querySelector(".tr-media").value,
         sleeve_grade: row.querySelector(".tr-sleeve").value,
         photos,
@@ -2186,9 +2399,11 @@ async function saveTradeIn(event) {
       method: "POST",
       body: JSON.stringify({
         customer_id: Number($("#t-customer").value) || null,
-        offer_mode: document.querySelector('input[name="offer_mode"]:checked').value,
-        id_type: $("#t-idtype").value,
-        id_number: $("#t-idnum").value,
+        trade_date: tradeDate,
+        customer_type: document.querySelector('input[name="customer_type"]:checked').value,
+        offer_mode: offerMode,
+        id_type: idType,
+        id_number: idNumber,
         signature: $("#t-sign").value,
         customer_accepts: $("#t-accept").checked,
         rows,
