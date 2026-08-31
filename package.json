@@ -1,0 +1,25 @@
+{
+  "name": "running2",
+  "version": "1.0.0",
+  "description": "This project is now a frontend-only version of the Vintage Vinyl dashboard.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sahil-Prasad27/running2.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Sahil-Prasad27/running2/issues"
+  },
+  "homepage": "https://github.com/Sahil-Prasad27/running2#readme",
+  "dependencies": {
+    "jsdom": "^29.1.1",
+    "playwright": "^1.50.0"
+  }
+}
